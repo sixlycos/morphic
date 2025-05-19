@@ -12,7 +12,6 @@ import { EmptyScreen } from './empty-screen'
 import { ModelSelector } from './model-selector'
 import { SearchModeToggle } from './search-mode-toggle'
 import { Button } from './ui/button'
-import { IconLogo } from './ui/icons'
 
 interface ChatPanelProps {
   input: string
@@ -52,6 +51,8 @@ export function ChatPanel({
   const [isComposing, setIsComposing] = useState(false) // Composition state
   const [enterDisabled, setEnterDisabled] = useState(false) // Disable Enter after composition ends
   const { close: closeArtifact } = useArtifact()
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
+  const faceRef = useRef<HTMLDivElement>(null)
 
   const handleCompositionStart = () => setIsComposing(true)
 
@@ -107,6 +108,76 @@ export function ChatPanel({
     }
   }
 
+  // 眼球跟踪鼠标效果
+  useEffect(() => {
+    if (!faceRef.current) return
+
+    const face = faceRef.current
+    const leftEye = face.querySelector('.left-eye') as SVGEllipseElement
+    const rightEye = face.querySelector('.right-eye') as SVGEllipseElement
+
+    if (!leftEye || !rightEye) return
+
+    let rafId: number
+    let currentX = 0
+    let currentY = 0
+    let targetX = 0
+    let targetY = 0
+
+    const lerp = (start: number, end: number, factor: number) => {
+      return start + (end - start) * factor
+    }
+
+    const animate = () => {
+      // 使用缓动函数使移动更加平滑
+      currentX = lerp(currentX, targetX, 0.1)
+      currentY = lerp(currentY, targetY, 0.1)
+
+      // 基础位置
+      const baseLeftX = 95
+      const baseRightX = 142
+      const baseY = 134
+
+      // 应用位置
+      leftEye.setAttribute('cx', `${baseLeftX + currentX}`)
+      leftEye.setAttribute('cy', `${baseY + currentY}`)
+      rightEye.setAttribute('cx', `${baseRightX + currentX}`)
+      rightEye.setAttribute('cy', `${baseY + currentY}`)
+
+      rafId = requestAnimationFrame(animate)
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // 获取视窗尺寸
+      const windowWidth = window.innerWidth
+      const windowHeight = window.innerHeight
+
+      // 计算鼠标位置相对于视窗的百分比 (-1 到 1 的范围)
+      const mouseXPercent = (e.clientX / windowWidth) * 2 - 1
+      const mouseYPercent = (e.clientY / windowHeight) * 2 - 1
+
+      // 增加垂直方向的移动范围
+      const maxMoveX = 35
+      const maxMoveY = 35
+
+      // 使用二次函数使移动更加夸张
+      targetX = Math.sign(mouseXPercent) * maxMoveX * Math.pow(Math.abs(mouseXPercent), 1.5)
+      targetY = Math.sign(mouseYPercent) * maxMoveY * Math.pow(Math.abs(mouseYPercent), 1.5)
+    }
+
+    // 开始动画循环
+    animate()
+
+    // 添加鼠标移动事件监听器
+    window.addEventListener('mousemove', handleMouseMove)
+
+    // 清理函数
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      cancelAnimationFrame(rafId)
+    }
+  }, []) // 空依赖数组，只在组件挂载时运行一次
+
   return (
     <div
       className={cn(
@@ -115,11 +186,22 @@ export function ChatPanel({
       )}
     >
       {messages.length === 0 && (
-        <div className="mb-10 flex flex-col items-center gap-4">
-          <IconLogo className="size-12 text-muted-foreground" />
-          <p className="text-center text-3xl font-semibold">
-            How can I help you today?
-          </p>
+        <div className="flex flex-col items-center justify-center p-8 mb-0 md:mb-4 space-y-6">
+          <div className="relative max-w-md mx-auto mt-8">
+            <div className="bg-background rounded-2xl px-4 py-2 border shadow-sm relative transition-all duration-500 ease-out transform opacity-100 translate-y-0 dialog-float">
+              <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-4 h-4 bg-background rotate-45 border-b border-r shadow-sm"></div>
+              <label className="text-sm md:text-base text-muted-foreground text-center block">今天需要什么帮助？</label>
+            </div>
+          </div>
+          <div ref={faceRef} className="relative w-12 h-12">
+            <svg fill="currentColor" viewBox="0 0 256 256" role="img" xmlns="http://www.w3.org/2000/svg" className="w-12 h-12">
+              <circle cx="128" cy="128" r="128" fill="#222"></circle>
+              <g className="eyes">
+                <ellipse cx="95" cy="134" rx="18" ry="18" fill="white" className="left-eye"></ellipse>
+                <ellipse cx="142" cy="134" rx="18" ry="18" fill="white" className="right-eye"></ellipse>
+              </g>
+            </svg>
+          </div>
         </div>
       )}
       <form
@@ -134,7 +216,7 @@ export function ChatPanel({
             size="icon"
             className="absolute -top-10 right-4 z-20 size-8 rounded-full shadow-md"
             onClick={handleScrollToBottom}
-            title="Scroll to bottom"
+            title="滚动到底部"
           >
             <ChevronDown size={16} />
           </Button>
@@ -149,7 +231,7 @@ export function ChatPanel({
             tabIndex={0}
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}
-            placeholder="Ask a question..."
+            placeholder="输入问题..."
             spellCheck={false}
             value={input}
             disabled={isLoading || isToolInvocationInProgress()}

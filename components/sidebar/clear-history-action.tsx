@@ -35,7 +35,7 @@ export function ClearHistoryAction({ empty }: ClearHistoryActionProps) {
   const onClear = () =>
     start(async () => {
       const res = await clearChats()
-      res?.error ? toast.error(res.error) : toast.success('History cleared')
+      res?.error ? toast.error(res.error) : toast.success('历史记录已清除')
       setOpen(false)
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
     })
@@ -45,7 +45,7 @@ export function ClearHistoryAction({ empty }: ClearHistoryActionProps) {
       <DropdownMenuTrigger asChild>
         <SidebarGroupAction disabled={empty} className="static size-7 p-1">
           <MoreHorizontal size={16} />
-          <span className="sr-only">History Actions</span>
+          <span className="sr-only">历史操作</span>
         </SidebarGroupAction>
       </DropdownMenuTrigger>
 
@@ -57,22 +57,21 @@ export function ClearHistoryAction({ empty }: ClearHistoryActionProps) {
               className="gap-2 text-destructive focus:text-destructive"
               onSelect={event => event.preventDefault()} // Prevent closing dropdown
             >
-              <Trash2 size={14} /> Clear History
+              <Trash2 size={14} /> 清除历史
             </DropdownMenuItem>
           </AlertDialogTrigger>
 
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogTitle>确定要清除吗？</AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. It will permanently delete your
-                history.
+                此操作无法撤销。将永久删除您的历史记录。
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel disabled={isPending}>取消</AlertDialogCancel>
               <AlertDialogAction disabled={isPending} onClick={onClear}>
-                {isPending ? <Spinner /> : 'Clear'}
+                {isPending ? <Spinner /> : '清除'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

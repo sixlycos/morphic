@@ -4,7 +4,6 @@ import { Model } from '@/lib/types/models'
 import { getCookie, setCookie } from '@/lib/utils/cookies'
 import { isReasoningModel } from '@/lib/utils/registry'
 import { Check, ChevronsUpDown, Lightbulb } from 'lucide-react'
-import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { createModelId } from '../lib/utils'
 import { Button } from './ui/button'
@@ -54,14 +53,14 @@ export function ModelSelector({ models }: ModelSelectorProps) {
   const handleModelSelect = (id: string) => {
     const newValue = id === value ? '' : id
     setValue(newValue)
-    
+
     const selectedModel = models.find(model => createModelId(model) === newValue)
     if (selectedModel) {
       setCookie('selectedModel', JSON.stringify(selectedModel))
     } else {
       setCookie('selectedModel', '')
     }
-    
+
     setOpen(false)
   }
 
@@ -79,29 +78,32 @@ export function ModelSelector({ models }: ModelSelectorProps) {
         >
           {selectedModel ? (
             <div className="flex items-center space-x-1">
-              <Image
-                src={`/providers/logos/${selectedModel.providerId}.svg`}
-                alt={selectedModel.provider}
-                width={18}
-                height={18}
-                className="bg-white rounded-full border"
-              />
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500 mr-1">
+                <polygon points="13 19 22 12 13 5 13 19"></polygon>
+                <polygon points="2 19 11 12 2 5 2 19"></polygon>
+              </svg>
               <span className="text-xs font-medium">{selectedModel.name}</span>
               {isReasoningModel(selectedModel.id) && (
                 <Lightbulb size={12} className="text-accent-blue-foreground" />
               )}
             </div>
           ) : (
-            'Select model'
+            <div className="flex items-center space-x-1">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500 mr-1">
+                <polygon points="13 19 22 12 13 5 13 19"></polygon>
+                <polygon points="2 19 11 12 2 5 2 19"></polygon>
+              </svg>
+              <span>选择模型</span>
+            </div>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
         <Command>
-          <CommandInput placeholder="Search models..." />
+          <CommandInput placeholder="搜索模型..." />
           <CommandList>
-            <CommandEmpty>No model found.</CommandEmpty>
+            <CommandEmpty>未找到模型。</CommandEmpty>
             {Object.entries(groupedModels).map(([provider, models]) => (
               <CommandGroup key={provider} heading={provider}>
                 {models.map(model => {
@@ -114,21 +116,17 @@ export function ModelSelector({ models }: ModelSelectorProps) {
                       className="flex justify-between"
                     >
                       <div className="flex items-center space-x-2">
-                        <Image
-                          src={`/providers/logos/${model.providerId}.svg`}
-                          alt={model.provider}
-                          width={18}
-                          height={18}
-                          className="bg-white rounded-full border"
-                        />
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500 mr-1">
+                          <polygon points="13 19 22 12 13 5 13 19"></polygon>
+                          <polygon points="2 19 11 12 2 5 2 19"></polygon>
+                        </svg>
                         <span className="text-xs font-medium">
                           {model.name}
                         </span>
                       </div>
                       <Check
-                        className={`h-4 w-4 ${
-                          value === modelId ? 'opacity-100' : 'opacity-0'
-                        }`}
+                        className={`h-4 w-4 ${value === modelId ? 'opacity-100' : 'opacity-0'
+                          }`}
                       />
                     </CommandItem>
                   )

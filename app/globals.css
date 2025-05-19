@@ -55,6 +55,9 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --eye-move-x: 0px;
+    --eye-move-y: 0px;
   }
 
   .dark {
@@ -112,4 +115,43 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* 眼球动画相关样式 */
+.left-eye,
+.right-eye {
+  animation: blink 6s infinite;
+  will-change: transform, cx, cy;
+}
+
+.eyes {
+  transform: translate(var(--eye-move-x), var(--eye-move-y));
+}
+
+@keyframes blink {
+  0%,
+  95%,
+  98% {
+    ry: 18;
+  }
+  96% {
+    ry: 2;
+  }
+}
+
+/* 对话框动画 */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.dialog-float {
+  animation: float 3s ease-in-out infinite;
 }
