@@ -73,8 +73,8 @@
       "toolCallType": "native"
     },
     {
-      "id": "<AZURE_DEPLOYMENT_NAME>",
-      "name": "<AZURE_DEPLOYMENT_NAME>",
+      "id": "gpt-4.1",
+      "name": "GPT-4.1 (Azure)",
       "provider": "Azure",
       "providerId": "azure",
       "enabled": true,
@@ -159,22 +159,40 @@
       "toolCallType": "native"
     },
     {
-      "id": "deepseek-r1",
-      "name": "DeepSeek R1",
+      "id": "qwen2.5:3b",
+      "name": "Qwen 2.5 3B",
       "provider": "Ollama",
       "providerId": "ollama",
       "enabled": true,
       "toolCallType": "manual",
-      "toolCallModel": "phi4"
+      "toolCallModel": "qwen2.5:3b"
     },
     {
-      "id": "<OLLAMA_MODEL_ID>",
-      "name": "<OLLAMA_MODEL_NAME>",
+      "id": "mistral:7b",
+      "name": "Mistral 7B",
       "provider": "Ollama",
       "providerId": "ollama",
       "enabled": true,
       "toolCallType": "manual",
-      "toolCallModel": "<OLLAMA_MODEL_ID>"
+      "toolCallModel": "mistral:7b"
+    },
+    {
+      "id": "gemma2:9b",
+      "name": "Gemma 2 9B",
+      "provider": "Ollama",
+      "providerId": "ollama",
+      "enabled": true,
+      "toolCallType": "manual",
+      "toolCallModel": "gemma2:9b"
+    },
+    {
+      "id": "deepseek-r1:7b",
+      "name": "DeepSeek R1 7B",
+      "provider": "Ollama",
+      "providerId": "ollama",
+      "enabled": true,
+      "toolCallType": "manual",
+      "toolCallModel": "deepseek-r1:7b"
     },
     {
       "id": "grok-2-1212",

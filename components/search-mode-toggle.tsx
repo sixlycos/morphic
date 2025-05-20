@@ -38,7 +38,7 @@ export function SearchModeToggle() {
       )}
     >
       <Globe className="size-4" />
-      <span className="text-xs">搜索</span>
+      <span className="text-xs">联网检索</span>
     </Toggle>
   )
 }

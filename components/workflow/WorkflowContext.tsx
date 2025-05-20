@@ -1,3 +1,5 @@
+"use client";
+
 import React, { createContext, ReactNode, useContext, useReducer } from 'react';
 
 // 定义工作流状态类型

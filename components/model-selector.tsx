@@ -18,8 +18,11 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 
 function groupModelsByProvider(models: Model[]) {
+  // 过滤只保留启用的模型，并且只保留指定提供商的模型
+  const allowedProviders = ['Azure', 'Ollama', 'DeepSeek', 'Anthropic']
+
   return models
-    .filter(model => model.enabled)
+    .filter(model => model.enabled && allowedProviders.includes(model.provider))
     .reduce((groups, model) => {
       const provider = model.provider
       if (!groups[provider]) {

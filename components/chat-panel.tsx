@@ -11,6 +11,7 @@ import { useArtifact } from './artifact/artifact-context'
 import { EmptyScreen } from './empty-screen'
 import { ModelSelector } from './model-selector'
 import { SearchModeToggle } from './search-mode-toggle'
+import { ToolsSelector } from './tools-selector'
 import { Button } from './ui/button'
 
 interface ChatPanelProps {
@@ -157,8 +158,8 @@ export function ChatPanel({
       const mouseYPercent = (e.clientY / windowHeight) * 2 - 1
 
       // 增加垂直方向的移动范围
-      const maxMoveX = 35
-      const maxMoveY = 35
+      const maxMoveX = 45
+      const maxMoveY = 45
 
       // 使用二次函数使移动更加夸张
       targetX = Math.sign(mouseXPercent) * maxMoveX * Math.pow(Math.abs(mouseXPercent), 1.5)
@@ -206,7 +207,7 @@ export function ChatPanel({
       )}
       <form
         onSubmit={handleSubmit}
-        className={cn('max-w-3xl w-full mx-auto relative')}
+        className="max-w-[720px] w-full mx-auto relative"
       >
         {/* Scroll to bottom button - only shown when showScrollToBottomButton is true */}
         {showScrollToBottomButton && messages.length > 0 && (
@@ -222,12 +223,12 @@ export function ChatPanel({
           </Button>
         )}
 
-        <div className="relative flex flex-col w-full gap-2 bg-muted rounded-3xl border border-input">
+        <div className="relative flex flex-col w-full gap-2 bg-[#F5F5F5] rounded-3xl border border-input p-2">
           <Textarea
             ref={inputRef}
             name="input"
-            rows={2}
-            maxRows={5}
+            rows={1}
+            maxRows={1}
             tabIndex={0}
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}
@@ -235,7 +236,7 @@ export function ChatPanel({
             spellCheck={false}
             value={input}
             disabled={isLoading || isToolInvocationInProgress()}
-            className="resize-none w-full min-h-12 bg-transparent border-0 p-4 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="resize-none w-full min-h-16 bg-transparent border-0 px-4 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 h-[44px]"
             onChange={e => {
               handleInputChange(e)
               setShowEmptyScreen(e.target.value.length === 0)
@@ -260,11 +261,12 @@ export function ChatPanel({
             onBlur={() => setShowEmptyScreen(false)}
           />
 
-          {/* Bottom menu area */}
-          <div className="flex items-center justify-between p-3">
+          {/* 底部工具栏区域 */}
+          <div className="flex items-center justify-between px-4 py-2 border-t border-input/30">
             <div className="flex items-center gap-2">
               <ModelSelector models={models || []} />
               <SearchModeToggle />
+              <ToolsSelector />
             </div>
             <div className="flex items-center gap-2">
               {messages.length > 0 && (

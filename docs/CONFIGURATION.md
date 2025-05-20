@@ -1,5 +1,8 @@
 # Configuration Guide
 
+# database pwd
+EVHi6xkGnP58PrFs
+
 This guide covers the optional features and their configuration in Morphic.
 
 ## Table of Contents

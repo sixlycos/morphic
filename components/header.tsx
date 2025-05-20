@@ -3,9 +3,7 @@
 import { useSidebar } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import { User } from '@supabase/supabase-js'
-// import Link from 'next/link' // No longer needed directly here for Sign In button
 import React from 'react'
-// import { Button } from './ui/button' // No longer needed directly here for Sign In button
 
 interface HeaderProps {
   user: User | null
@@ -23,10 +21,7 @@ export const Header: React.FC<HeaderProps> = ({ user }) => {
     >
       {/* This div can be used for a logo or title on the left if needed */}
       <div></div>
-
-      <div className="flex items-center gap-2">
-        {/* 已移除用户菜单 */}
-      </div>
+      <div></div>
     </header>
   )
 }
