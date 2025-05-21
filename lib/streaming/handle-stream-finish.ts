@@ -13,6 +13,7 @@ interface HandleStreamFinishParams {
   userId: string
   skipRelatedQuestions?: boolean
   annotations?: ExtendedCoreMessage[]
+  isReportMode?: boolean
 }
 
 export async function handleStreamFinish({
@@ -23,7 +24,8 @@ export async function handleStreamFinish({
   dataStream,
   userId,
   skipRelatedQuestions = false,
-  annotations = []
+  annotations = [],
+  isReportMode = false
 }: HandleStreamFinishParams) {
   try {
     const extendedCoreMessages = convertToExtendedCoreMessages(originalMessages)
@@ -56,6 +58,20 @@ export async function handleStreamFinish({
         updatedRelatedQuestionsAnnotation.content as JSONValue
       )
       allAnnotations.push(updatedRelatedQuestionsAnnotation)
+    }
+
+    // 如果是研报模式，添加特定的注释
+    if (isReportMode) {
+      const reportAnnotation: ExtendedCoreMessage = {
+        role: 'data',
+        content: {
+          type: 'report-mode',
+          data: { enabled: true }
+        } as JSONValue
+      }
+
+      dataStream.writeMessageAnnotation(reportAnnotation.content as JSONValue)
+      allAnnotations.push(reportAnnotation)
     }
 
     // Create the message to save

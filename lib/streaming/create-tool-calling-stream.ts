@@ -24,6 +24,36 @@ function containsAskQuestionTool(message: CoreMessage) {
   )
 }
 
+// 检查是否是研报生成模式
+function isResearchReportMode(messages: CoreMessage[]): boolean {
+  // 检查最后一条用户消息是否包含研报相关指令
+  if (messages.length === 0) return false
+
+  const lastUserMessageIndex = messages.findIndex(
+    (msg, idx) => msg.role === 'user' && idx === messages.length - 1
+  )
+
+  if (lastUserMessageIndex === -1) return false
+
+  const lastUserMessage = messages[lastUserMessageIndex]
+  const content =
+    typeof lastUserMessage.content === 'string'
+      ? lastUserMessage.content
+      : Array.isArray(lastUserMessage.content)
+      ? lastUserMessage.content
+          .map(item => (typeof item === 'string' ? item : ''))
+          .join(' ')
+      : ''
+
+  // 简单检查消息内容是否包含研报关键词
+  return (
+    content.includes('研报') ||
+    content.includes('研究报告') ||
+    content.includes('research report') ||
+    content.includes('投资建议')
+  )
+}
+
 export function createToolCallingStreamResponse(config: BaseStreamConfig) {
   return createDataStreamResponse({
     execute: async (dataStream: DataStreamWriter) => {
@@ -37,10 +67,14 @@ export function createToolCallingStreamResponse(config: BaseStreamConfig) {
           getMaxAllowedTokens(model)
         )
 
+        // 检查是否是研报模式
+        const isReportMode = isResearchReportMode(truncatedMessages)
+
         let researcherConfig = await researcher({
           messages: truncatedMessages,
           model: modelId,
-          searchMode
+          searchMode,
+          isReportMode // 传递研报模式标志
         })
 
         const result = streamText({
@@ -49,6 +83,7 @@ export function createToolCallingStreamResponse(config: BaseStreamConfig) {
             // Check if the last message contains an ask_question tool invocation
             const shouldSkipRelatedQuestions =
               isReasoningModel(modelId) ||
+              isReportMode || // 研报模式下跳过相关问题生成
               (result.response.messages.length > 0 &&
                 containsAskQuestionTool(
                   result.response.messages[
@@ -63,7 +98,8 @@ export function createToolCallingStreamResponse(config: BaseStreamConfig) {
               chatId,
               dataStream,
               userId,
-              skipRelatedQuestions: shouldSkipRelatedQuestions
+              skipRelatedQuestions: shouldSkipRelatedQuestions,
+              isReportMode // 传递研报模式标志
             })
           }
         })

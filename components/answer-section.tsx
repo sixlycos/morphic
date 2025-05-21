@@ -53,6 +53,7 @@ export function AnswerSection({
   ) : (
     <DefaultSkeleton />
   )
+
   return (
     <CollapsibleMessage
       role="assistant"

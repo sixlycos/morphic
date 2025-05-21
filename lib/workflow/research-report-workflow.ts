@@ -1,4 +1,4 @@
-import { generateResearchReport } from '../agents/research-report-agent'
+import { streamingResearchReport } from '../agents/research-report-agent'
 import {
   fetchDailyData,
   fetchFinancialData,
@@ -53,12 +53,38 @@ export async function executeResearchReportWorkflow(
   })
 
   try {
-    // 1. 获取股票基本信息
+    // 发送工作流开始事件
     dataStream.write({
-      type: 'workflow-progress',
+      type: 'step-start',
+      message: '研报生成开始',
+      data: {
+        stockCode: params.stockCode,
+        reportDate: params.reportDate
+      },
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
+
+    // 1. 获取股票基本信息 - 作为工具调用记录
+    dataStream.write({
+      type: 'step-start',
       message: '正在获取股票基本信息...',
-      step: 1,
-      percentage: 20
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
+
+    // 记录工具调用开始
+    const stockInfoToolCallId = generateToolCallId()
+    const stockInfoToolInvocation = {
+      toolName: 'fetchStockInfo',
+      toolCallId: stockInfoToolCallId,
+      args: { ts_code: params.stockCode },
+      state: 'running' as const
+    }
+
+    dataStream.write({
+      type: 'tool-invocation',
+      message: '正在获取股票基础信息',
+      data: stockInfoToolInvocation,
+      toolInvocations: [stockInfoToolInvocation] // 添加toolInvocations数组
     })
 
     const basicInfo = await fetchStockBasicInfo({
@@ -66,10 +92,50 @@ export async function executeResearchReportWorkflow(
     })
 
     if (!basicInfo || basicInfo.length === 0) {
+      // 记录工具调用失败
+      const errorToolInvocation = {
+        toolName: 'fetchStockInfo',
+        toolCallId: stockInfoToolCallId,
+        state: 'error' as const,
+        error: `未找到股票信息: ${params.stockCode}`
+      }
+
+      dataStream.write({
+        type: 'tool-invocation',
+        message: '获取股票信息失败',
+        data: errorToolInvocation,
+        toolInvocations: [errorToolInvocation] // 添加toolInvocations数组
+      })
       throw new Error(`未找到股票信息: ${params.stockCode}`)
     }
 
+    // 记录工具调用结果
+    const stockInfoResultInvocation = {
+      toolName: 'fetchStockInfo',
+      toolCallId: stockInfoToolCallId,
+      state: 'result' as const,
+      result: {
+        basicInfo: basicInfo[0]
+      }
+    }
+
+    dataStream.write({
+      type: 'tool-invocation',
+      message: '股票基础信息获取完成',
+      data: stockInfoResultInvocation,
+      toolInvocations: [stockInfoResultInvocation] // 添加toolInvocations数组
+    })
+
+    // 使用标准的display类型消息
     // 展示股票基本信息
+    dataStream.write({
+      type: 'workflow-progress',
+      message: '获取股票基本信息完成',
+      step: 1,
+      percentage: 25,
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
+
     dataStream.write({
       type: 'display',
       display: {
@@ -83,21 +149,68 @@ export async function executeResearchReportWorkflow(
           market: basicInfo[0].market,
           listDate: basicInfo[0].list_date
         }
-      }
+      },
+      toolInvocations: [] // 添加空的toolInvocations字段
     })
 
-    // 2. 获取财务数据
+    // 2. 获取财务数据 - 作为工具调用记录
     dataStream.write({
-      type: 'workflow-progress',
+      type: 'step-start',
       message: '正在获取财务数据...',
-      step: 2,
-      percentage: 40
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
+
+    // 记录工具调用开始
+    const financialDataToolCallId = generateToolCallId()
+    const financialDataInvocation = {
+      toolName: 'fetchFinancialData',
+      toolCallId: financialDataToolCallId,
+      args: {
+        ts_code: params.stockCode,
+        report_date: params.reportDate
+      },
+      state: 'running' as const
+    }
+
+    dataStream.write({
+      type: 'tool-invocation',
+      message: '正在获取财务数据',
+      data: financialDataInvocation,
+      toolInvocations: [financialDataInvocation] // 添加toolInvocations数组
     })
 
     const financialData = await fetchFinancialData(
       params.stockCode,
       params.reportDate
     )
+
+    // 记录工具调用结果
+    const financialDataResultInvocation = {
+      toolName: 'fetchFinancialData',
+      toolCallId: financialDataToolCallId,
+      state: 'result' as const,
+      result: {
+        incomeCount: financialData.income.length,
+        balanceCount: financialData.balance.length,
+        cashflowCount: financialData.cashflow.length,
+        indicatorsCount: financialData.indicators.length
+      }
+    }
+
+    dataStream.write({
+      type: 'tool-invocation',
+      message: '财务数据获取完成',
+      data: financialDataResultInvocation,
+      toolInvocations: [financialDataResultInvocation] // 添加toolInvocations数组
+    })
+
+    dataStream.write({
+      type: 'workflow-progress',
+      message: '获取财务数据完成',
+      step: 2,
+      percentage: 40,
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
 
     // 展示获取到的财务数据数量
     dataStream.write({
@@ -111,26 +224,84 @@ export async function executeResearchReportWorkflow(
           cashflow: financialData.cashflow.length + '条记录',
           indicators: financialData.indicators.length + '条记录'
         }
-      }
+      },
+      toolInvocations: [] // 添加空的toolInvocations字段
     })
 
-    // 3. 获取市场行情数据
+    // 3. 获取市场行情数据 - 作为工具调用记录
     dataStream.write({
-      type: 'workflow-progress',
+      type: 'step-start',
       message: '正在获取市场行情数据...',
-      step: 3,
-      percentage: 60
+      toolInvocations: [] // 添加空的toolInvocations字段
     })
 
     // 获取近3个月的行情数据
     const endDate = params.reportDate
     const startDate = calculateStartDate(endDate, 90) // 获取90天前的日期
 
+    // 记录工具调用开始
+    const marketDataToolCallId = generateToolCallId()
+    const marketDataInvocation = {
+      toolName: 'fetchMarketData',
+      toolCallId: marketDataToolCallId,
+      args: {
+        ts_code: params.stockCode,
+        start_date: startDate,
+        end_date: endDate
+      },
+      state: 'running' as const
+    }
+
+    dataStream.write({
+      type: 'tool-invocation',
+      message: '正在获取市场行情数据',
+      data: marketDataInvocation,
+      toolInvocations: [marketDataInvocation] // 添加toolInvocations数组
+    })
+
     const marketData = await fetchDailyData(
       params.stockCode,
       startDate,
       endDate
     )
+
+    // 计算价格变动百分比
+    const priceChangePercent =
+      marketData.length > 0
+        ? ((marketData[marketData.length - 1].close - marketData[0].close) /
+            marketData[0].close) *
+          100
+        : 0
+
+    // 记录工具调用结果
+    const marketDataResultInvocation = {
+      toolName: 'fetchMarketData',
+      toolCallId: marketDataToolCallId,
+      state: 'result' as const,
+      result: {
+        daysCount: marketData.length,
+        startDate,
+        endDate,
+        startPrice: marketData[0]?.close,
+        endPrice: marketData[marketData.length - 1]?.close,
+        priceChange: priceChangePercent.toFixed(2) + '%'
+      }
+    }
+
+    dataStream.write({
+      type: 'tool-invocation',
+      message: '市场行情数据获取完成',
+      data: marketDataResultInvocation,
+      toolInvocations: [marketDataResultInvocation] // 添加toolInvocations数组
+    })
+
+    dataStream.write({
+      type: 'workflow-progress',
+      message: '获取市场数据完成',
+      step: 3,
+      percentage: 60,
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
 
     // 展示市场数据概览
     dataStream.write({
@@ -154,7 +325,8 @@ export async function executeResearchReportWorkflow(
                 ).toFixed(2) + '%'
               : 'N/A'
         }
-      }
+      },
+      toolInvocations: [] // 添加空的toolInvocations字段
     })
 
     // 4. 整合数据
@@ -168,45 +340,313 @@ export async function executeResearchReportWorkflow(
       currentModel: params.currentModel
     }
 
-    // 5. 生成研报内容
+    // 5. 使用流式生成研报内容
+    dataStream.write({
+      type: 'step-start',
+      message: '正在生成研报内容...',
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
+
     dataStream.write({
       type: 'workflow-progress',
       message: '正在生成研报内容...',
       step: 4,
-      percentage: 80
+      percentage: 70,
+      toolInvocations: [] // 添加空的toolInvocations字段
     })
 
-    const reportContent = await generateResearchReport(reportData)
+    // 记录模型调用开始
+    const reportGenerationToolCallId = generateToolCallId()
+    const reportGenerationInvocation = {
+      toolName: 'generateResearchReport',
+      toolCallId: reportGenerationToolCallId,
+      args: {
+        stockName: basicInfo[0].name,
+        stockCode: params.stockCode,
+        industry: basicInfo[0].industry,
+        modelId: params.currentModel || '默认模型'
+      },
+      state: 'running' as const
+    }
+
+    dataStream.write({
+      type: 'tool-invocation',
+      message: '正在生成投资研报',
+      data: reportGenerationInvocation,
+      toolInvocations: [reportGenerationInvocation] // 添加toolInvocations数组
+    })
+
+    // 使用新的流式生成方法
+    const reportResult = await streamingResearchReport(reportData, {
+      // 处理步骤开始
+      onStepStart: (step, details) => {
+        console.log(`研报生成步骤开始: ${step}`, details)
+
+        let message = '正在生成研报...'
+        let percentage = 75
+
+        if (step === 'data_preparation') {
+          message = '正在准备研报数据...'
+          percentage = 72
+        } else if (step === 'model_selection') {
+          message = '正在选择研报生成模型...'
+          percentage = 75
+        } else if (step === 'report_generation') {
+          message = '开始生成研报内容...'
+          percentage = 78
+        } else if (step === 'section_generation') {
+          message = `正在生成"${details?.section || '研报部分'}"...`
+          percentage = 80
+        }
+
+        dataStream.write({
+          type: 'workflow-progress',
+          message,
+          step: 4,
+          percentage,
+          toolInvocations: [] // 添加空的toolInvocations字段
+        })
+
+        // 发送步骤开始的part消息
+        dataStream.write({
+          type: 'step-start',
+          message: `${message}`,
+          data: details,
+          toolInvocations: [] // 添加空的toolInvocations字段
+        })
+      },
+
+      // 处理部分内容生成
+      onPartialContent: (content, section) => {
+        console.log(`研报部分内容更新: ${section}`, content.length)
+
+        const partialContentInvocation = {
+          toolName: 'generateResearchReportSection',
+          toolCallId: `${reportGenerationToolCallId}_${section}`,
+          state: 'partial' as const,
+          section,
+          contentLength: content.length
+        }
+
+        // 发送部分内容更新
+        dataStream.write({
+          type: 'reasoning',
+          message: `生成研报内容: ${section}`,
+          data: {
+            section,
+            content
+          },
+          toolInvocations: [partialContentInvocation] // 添加toolInvocations数组
+        })
+      },
+
+      // 处理步骤完成
+      onStepComplete: (step, result) => {
+        console.log(`研报生成步骤完成: ${step}`, result)
+
+        let message = '研报部分生成完成'
+        let percentage = 85
+
+        if (step === 'data_preparation') {
+          message = '研报数据准备完成'
+          percentage = 75
+        } else if (step === 'model_selection') {
+          message = '模型选择完成'
+          percentage = 78
+        } else if (step === 'report_generation') {
+          message = '研报内容生成完成'
+          percentage = 95
+        } else if (step === 'section_generation') {
+          message = `"${result?.section || '研报部分'}"生成完成`
+          percentage = 90
+        }
+
+        const stepCompleteInvocation = {
+          toolName: `complete${step.charAt(0).toUpperCase() + step.slice(1)}`,
+          toolCallId: `${reportGenerationToolCallId}_${step}_complete`,
+          state: 'complete' as const,
+          result
+        }
+
+        dataStream.write({
+          type: 'workflow-progress',
+          message,
+          step: 4,
+          percentage,
+          toolInvocations: [stepCompleteInvocation] // 添加toolInvocations数组
+        })
+
+        // 发送步骤完成的part消息
+        dataStream.write({
+          type: 'step-complete',
+          message: `${message}`,
+          data: result,
+          toolInvocations: [stepCompleteInvocation] // 添加toolInvocations数组
+        })
+      },
+
+      // 处理错误
+      onError: error => {
+        console.error('研报生成出错:', error)
+
+        // 记录工具调用失败
+        const errorInvocation = {
+          toolName: 'generateResearchReport',
+          toolCallId: reportGenerationToolCallId,
+          state: 'error' as const,
+          error: error.message
+        }
+
+        dataStream.write({
+          type: 'tool-invocation',
+          message: '研报生成失败',
+          data: errorInvocation,
+          toolInvocations: [errorInvocation] // 添加toolInvocations数组
+        })
+
+        dataStream.write({
+          type: 'error',
+          message: `研报生成出错: ${error.message}`,
+          error: error.message,
+          toolInvocations: [errorInvocation] // 添加toolInvocations数组
+        })
+      }
+    })
+
+    // 记录模型调用完成
+    const reportResultInvocation = {
+      toolName: 'generateResearchReport',
+      toolCallId: reportGenerationToolCallId,
+      state: 'result' as const,
+      result: {
+        reportLength: reportResult.text?.length || 0,
+        sectionsCount: reportResult.parts?.length || 0
+      }
+    }
+
+    dataStream.write({
+      type: 'tool-invocation',
+      message: '投资研报生成完成',
+      data: reportResultInvocation,
+      toolInvocations: [reportResultInvocation] // 添加toolInvocations数组
+    })
 
     // 6. 处理完成
+    dataStream.write({
+      type: 'step-start',
+      message: '研报生成完成，正在优化展示...',
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
+
     dataStream.write({
       type: 'workflow-progress',
       message: '研报生成完成，正在优化展示...',
       step: 5,
-      percentage: 100
+      percentage: 95,
+      toolInvocations: [] // 添加空的toolInvocations字段
     })
 
-    // 在返回结果前记录日志
-    console.log('研报工作流执行完成，准备返回数据')
+    // 输出研报各部分为独立的part
+    if (reportResult?.parts && reportResult.parts.length > 0) {
+      // 每个部分单独发送
+      for (const part of reportResult.parts) {
+        if (part.type === 'section' && part.title && part.content) {
+          const partInvocation = {
+            toolName: 'displayReportSection',
+            toolCallId: generateToolCallId(),
+            state: 'result' as const,
+            section: part.title,
+            contentLength: part.content.length
+          }
 
-    // 添加完成消息
+          dataStream.write({
+            type: 'part',
+            display: {
+              kind: 'section',
+              title: part.title,
+              content: part.content
+            },
+            toolInvocations: [partInvocation] // 添加toolInvocations数组
+          })
+        }
+      }
+    }
+
+    // 清理研报内容，去除Markdown标记
+    const cleanReport = reportResult.text
+      ? reportResult.text.replace(/```markdown\n|\n```/g, '')
+      : ''
+
+    // 最终结果工具调用
+    const finalReportInvocation = {
+      toolName: 'finalizeResearchReport',
+      toolCallId: generateToolCallId(),
+      state: 'result' as const,
+      result: {
+        reportLength: cleanReport.length,
+        partsCount: reportResult.parts?.length || 0
+      }
+    }
+
+    // 只使用一种方式返回最终研报内容，避免重复
+    dataStream.write({
+      type: 'text',
+      text: cleanReport,
+      toolInvocations: [finalReportInvocation] // 添加toolInvocations数组
+    })
+
+    // 添加完成消息，但不重复完整内容
     dataStream.write({
       type: 'workflow-complete',
-      data: reportContent,
-      message: '研报生成完成，请查看详细内容'
+      data: { completed: true, length: cleanReport.length },
+      message: '研报生成完成，请查看详细内容',
+      toolInvocations: [finalReportInvocation] // 添加toolInvocations数组
     })
 
-    return reportContent
+    // 添加明确的日志和完成标记
+    console.log('========== 研报工作流执行完成 ==========')
+    console.log('研报数据类型:', typeof reportResult.text)
+    console.log('研报数据长度:', reportResult.text?.length || 0)
+    console.log('研报各部分数量:', reportResult.parts?.length || 0)
+    console.log('研报数据前200个字符:', reportResult.text?.substring(0, 200))
+    console.log('===========================================')
+
+    // 确保有有效数据但不再返回文本内容
+    if (
+      !reportResult.text ||
+      typeof reportResult.text !== 'string' ||
+      reportResult.text.trim().length === 0
+    ) {
+      console.error('警告：研报内容为空或无效！')
+      throw new Error('研报生成失败：内容为空或无效')
+    }
+
+    // 不再返回报告内容
+    return ''
   } catch (error) {
     console.error('研报工作流执行失败:', error)
+
+    const errorInvocation = {
+      toolName: 'researchReportWorkflow',
+      toolCallId: generateToolCallId(),
+      state: 'error' as const,
+      error: (error as Error).message
+    }
+
     dataStream.write({
       type: 'workflow-error',
       error: `研报生成失败: ${(error as Error).message}`,
       details: '处理过程中遇到了问题，请稍后再试',
-      suggestion: '您可以尝试使用不同的股票名称或股票代码'
+      suggestion: '您可以尝试使用不同的股票名称或股票代码',
+      toolInvocations: [errorInvocation] // 添加toolInvocations数组
     })
     throw error
   }
+}
+
+// 生成唯一工具调用ID
+function generateToolCallId(): string {
+  return `call_${Math.random().toString(36).substring(2, 15)}`
 }
 
 // 计算起始日期

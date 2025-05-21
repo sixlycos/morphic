@@ -3,13 +3,18 @@
 import { CHAT_ID } from '@/lib/constants'
 import { Model } from '@/lib/types/models'
 import { cn } from '@/lib/utils'
-import { useChat } from '@ai-sdk/react'
-import { ChatRequestOptions } from 'ai'
+import { useChat, UseChatOptions } from '@ai-sdk/react'
+import { ChatRequestOptions, JSONValue } from 'ai'
 import { Message } from 'ai/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ChatMessages } from './chat-messages'
 import { ChatPanel } from './chat-panel'
+
+// 扩展UseChatOptions类型以包含onData
+type ExtendedUseChatOptions = UseChatOptions & {
+  onData?: (streamData: JSONValue, currentMessage: Message) => void
+}
 
 // Define section structure
 interface ChatSection {
@@ -56,11 +61,97 @@ export function Chat({
       window.dispatchEvent(new CustomEvent('chat-history-updated'))
     },
     onError: error => {
-      toast.error(`Error in chat: ${error.message}`)
+      console.error('聊天错误:', error)
+
+      // 特别处理消息通道错误
+      if (error.message && error.message.includes('message channel closed')) {
+        console.log('检测到消息通道错误，尝试恢复...')
+
+        // 尝试重新加载最后一条消息
+        const lastUserMessage = messages.findLast(msg => msg.role === 'user')
+        if (lastUserMessage) {
+          console.log('尝试重新加载最后一条消息:', lastUserMessage.content)
+          reload({
+            body: {
+              chatId: id,
+              regenerate: true
+            }
+          }).catch(retryError => {
+            console.error('重试失败:', retryError)
+            toast.error('连接中断，请刷新页面重试')
+          })
+        } else {
+          toast.error('连接中断，请刷新页面重试')
+        }
+      } else {
+        toast.error(`Error in chat: ${error.message}`)
+      }
+
+      // 尝试恢复进行中的会话
+      try {
+        if (status === 'streaming') {
+          stop()
+        }
+      } catch (e) {
+        console.error('停止流失败:', e)
+      }
     },
-    sendExtraMessageFields: false, // Disable extra message fields,
-    experimental_throttle: 100
-  })
+    onData: (streamData: JSONValue, currentMessage: Message) => {
+      try {
+        // 检查是否有消息和annotations
+        if (currentMessage && !currentMessage.annotations) {
+          currentMessage.annotations = []
+        }
+
+        // 检查是否为工作流或显示消息
+        if (streamData && typeof streamData === 'object') {
+          const type = (streamData as any).type
+          if (
+            type === 'workflow-start' ||
+            type === 'workflow-progress' ||
+            type === 'workflow-complete' ||
+            type === 'workflow-error' ||
+            type === 'display' ||
+            type === 'research_report' ||
+            type === 'tool_call'
+          ) {
+            // 记录消息
+            console.log('接收到流式数据:', type, streamData)
+
+            // 将其添加到当前消息的annotations
+            if (currentMessage && currentMessage.annotations) {
+              currentMessage.annotations.push(streamData)
+
+              // 强制更新消息状态
+              setMessages(prevMessages => {
+                const newMessages = [...prevMessages]
+                const index = newMessages.findIndex(msg => msg.id === currentMessage.id)
+                if (index !== -1) {
+                  newMessages[index] = {
+                    ...newMessages[index],
+                    annotations: [...(newMessages[index].annotations || []), streamData]
+                  }
+                }
+                return newMessages
+              })
+            }
+          }
+        }
+      } catch (error) {
+        console.error('处理流数据时出错:', error)
+      }
+    },
+    sendExtraMessageFields: false,
+    experimental_throttle: 100,
+    // 添加重试配置
+    retry: {
+      retries: 3,
+      retryDelay: 1000,
+      retryOn: (error: Error) => {
+        return error.message.includes('message channel closed')
+      }
+    }
+  } as ExtendedUseChatOptions)
 
   const isLoading = status === 'submitted' || status === 'streaming'
 
@@ -133,7 +224,7 @@ export function Chat({
 
   useEffect(() => {
     setMessages(savedMessages)
-  // eslint-disable-next-line react-hooks/exhaustive-deps 
+    // eslint-disable-next-line react-hooks/exhaustive-deps 
   }, [id])
 
   const onQuerySelect = (query: string) => {

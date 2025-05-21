@@ -1,4 +1,4 @@
-import { CoreMessage, JSONValue, Message } from 'ai'
+import { CoreMessage, JSONValue } from 'ai'
 
 export type SearchResults = {
   images: SearchResultImage[]
@@ -112,4 +112,9 @@ export type SearXNGSearchResults = {
   results: SearchResultItem[]
   number_of_results?: number
   query: string
+}
+
+// 研报工具结果类型，扩展搜索结果类型
+export type ResearchReportResults = SearchResults & {
+  markdownContent: string // 添加研报内容字段
 }

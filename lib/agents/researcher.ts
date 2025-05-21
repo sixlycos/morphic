@@ -53,11 +53,13 @@ type ResearcherReturn = Parameters<typeof streamText>[0]
 export function researcher({
   messages,
   model,
-  searchMode
+  searchMode,
+  isReportMode = false
 }: {
   messages: CoreMessage[]
   model: string
   searchMode: boolean
+  isReportMode?: boolean
 }): ResearcherReturn {
   try {
     const currentDate = new Date().toLocaleString()
@@ -85,7 +87,7 @@ export function researcher({
       experimental_activeTools: searchMode
         ? ['search', 'retrieve', 'videoSearch', 'ask_question']
         : [],
-      maxSteps: searchMode ? 10 : 1,
+      maxSteps: isReportMode ? 0 : searchMode ? 10 : 1, // 研报模式下不使用工具
       experimental_transform: smoothStream()
     }
   } catch (error) {

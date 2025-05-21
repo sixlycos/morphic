@@ -328,11 +328,21 @@ export async function executeToolCall(
         args: JSON.stringify(toolCall.parameters)
       }
     }
-    dataStream.writeData(toolCallAnnotation)
+    // 使用writeMessageAnnotation确保前端可以接收到
+    dataStream.writeMessageAnnotation(toolCallAnnotation)
 
     console.log('执行研报生成工具:', toolCall.parameters)
+
+    // 执行研报工具，我们使用原始dataStream，但在研报工具内部进行修改
     const reportParams = toolCall.parameters as ResearchReportToolParams
     toolResult = await executeResearchReportTool(reportParams, dataStream)
+
+    // 记录研报生成结果
+    console.log('研报工具执行完成，结果类型:', typeof toolResult)
+    console.log(
+      '研报工具执行完成，结果长度:',
+      typeof toolResult === 'string' ? toolResult.length : 0
+    )
 
     // 2. 发送工具调用结果状态
     const resultAnnotation = {
@@ -345,9 +355,9 @@ export async function executeToolCall(
         result: toolResult
       }
     }
-    dataStream.writeData(resultAnnotation)
+    // 使用writeMessageAnnotation确保前端能接收
+    dataStream.writeMessageAnnotation(resultAnnotation)
 
-    // 3. 添加消息注释
     const toolCallDataAnnotation: ExtendedCoreMessage = {
       role: 'data',
       content: {
@@ -356,11 +366,14 @@ export async function executeToolCall(
       } as JSONValue
     }
 
-    // 4. 添加工具调用消息
     const toolCallMessages: CoreMessage[] = [
       {
         role: 'assistant',
-        content: toolResult
+        content: `Tool call result: ${JSON.stringify(toolResult)}`
+      },
+      {
+        role: 'user',
+        content: 'Now answer the user question.'
       }
     ]
 

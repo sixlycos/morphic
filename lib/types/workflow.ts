@@ -5,6 +5,29 @@ export type WorkflowMessageType =
   | 'workflow-complete'
   | 'workflow-error'
   | 'display'
+  | 'research_report'
+  | 'workflow_message'
+  | 'research_report_result'
+  | 'search_results'
+  | 'step-start'
+  | 'step-complete'
+  | 'reasoning'
+  | 'error'
+  | 'part'
+  | 'text'
+  | 'tool-invocation'
+
+// 工具调用接口
+export interface ToolInvocation {
+  toolName: string
+  toolCallId: string
+  state: 'running' | 'result' | 'error' | 'partial' | 'complete'
+  args?: any
+  result?: any
+  error?: string
+  section?: string
+  contentLength?: number
+}
 
 // 工作流消息接口
 export interface WorkflowMessage {
@@ -18,6 +41,10 @@ export interface WorkflowMessage {
   // 增强错误处理
   details?: string
   suggestion?: string
+  // 文本输出
+  text?: string
+  // 工具调用记录
+  toolInvocations?: ToolInvocation[]
   // 展示字段
   display?: {
     kind: string
@@ -64,6 +91,12 @@ export function toJSONSafeMessage(message: WorkflowMessage): JSONObject {
   if (message.percentage !== undefined) result.percentage = message.percentage
   if (message.details !== undefined) result.details = message.details
   if (message.suggestion !== undefined) result.suggestion = message.suggestion
+  if (message.text !== undefined) result.text = message.text
+
+  // 处理工具调用记录
+  if (message.toolInvocations !== undefined) {
+    result.toolInvocations = JSON.stringify(message.toolInvocations)
+  }
 
   if (message.display) {
     result.display = {}

@@ -1,5 +1,6 @@
-import { DataStreamWriter } from 'ai'
+import { DataStreamWriter, JSONValue } from 'ai'
 import { z } from 'zod'
+import { SearchResults } from '../types'
 import { WorkflowDataStream, toJSONSafeMessage } from '../types/workflow'
 import { executeResearchReportWorkflow } from '../workflow/research-report-workflow'
 import { search } from './search'
@@ -121,156 +122,152 @@ function getDefaultReportDate(): string {
   return reportDate
 }
 
-// 研报生成工具执行函数
+// 统一使用项目标准的消息格式
 export async function executeResearchReportTool(
   params: ResearchReportToolParams,
   dataStream: DataStreamWriter
-): Promise<string> {
+): Promise<SearchResults> {
   console.log('执行研报生成工具,原始参数:', params)
 
   try {
-    // 1. 搜索股票基本信息
+    // 搜索股票基本信息
     const basicQuery = `${params.stockName} 股票 公司简介 行业分析`
     console.log('搜索股票基本信息:', basicQuery)
 
     const basicSearchResults = await search(basicQuery, 5, 'advanced')
 
-    // 展示基本信息搜索结果
-    dataStream.writeData({
+    // 使用标准的搜索结果消息格式
+    dataStream.writeMessageAnnotation({
       type: 'display',
       display: {
         kind: 'search_results',
         title: '股票基本信息',
         query: basicQuery,
-        results: basicSearchResults.results.map(r => ({
-          title: r.title,
-          content: r.content,
-          url: r.url
-        }))
+        results: basicSearchResults.results
       }
     })
 
-    // 2. 搜索最新研报信息
+    // 搜索最新研报信息
     const reportQuery = `${params.stockName} 最新研报 投资分析 财务数据`
     console.log('搜索研报信息:', reportQuery)
 
     const reportSearchResults = await search(reportQuery, 5, 'advanced')
 
-    // 展示研报搜索结果
-    dataStream.writeData({
+    // 使用标准的搜索结果消息格式
+    dataStream.writeMessageAnnotation({
       type: 'display',
       display: {
         kind: 'search_results',
         title: '最新研报信息',
         query: reportQuery,
-        results: reportSearchResults.results.map(r => ({
-          title: r.title,
-          content: r.content,
-          url: r.url
-        }))
+        results: reportSearchResults.results
       }
     })
 
-    // 创建适配器将DataStreamWriter转换为WorkflowDataStream
+    // 合并所有搜索结果，用于前端显示
+    const allSearchResults = [
+      ...basicSearchResults.results,
+      ...reportSearchResults.results
+    ]
+
+    // 在开始生成研报前先返回搜索结果
+    dataStream.writeMessageAnnotation({
+      type: 'search_results',
+      data: {
+        results: allSearchResults,
+        query: `${params.stockName} 研究报告`
+      }
+    })
+
+    // 简化工作流消息处理
     const workflowStream: WorkflowDataStream = {
       write: message => {
         console.log('工作流消息:', message)
-        dataStream.writeData(toJSONSafeMessage(message))
 
-        // 如果是完成消息且有数据，添加注释
-        if (message.type === 'workflow-complete' && message.data) {
-          console.log('工作流完成，添加研报数据注释')
-          dataStream.writeMessageAnnotation({
-            type: 'research_report',
-            data: message.data
-          })
+        // 处理所有消息类型，确保前端能接收到进度
+        if (message.type === 'display') {
+          // 使用toJSONSafeMessage确保消息安全序列化
+          const safeMessage = toJSONSafeMessage(message)
+          dataStream.writeMessageAnnotation(safeMessage as JSONValue)
+        } else if (
+          message.type === 'workflow-progress' ||
+          message.type === 'workflow-start' ||
+          message.type === 'workflow-complete'
+        ) {
+          // 传递工作流状态更新
+          dataStream.writeMessageAnnotation(
+            toJSONSafeMessage(message) as JSONValue
+          )
         }
       }
     }
 
     try {
-      // 1. 发送开始工作流的消息
-      workflowStream.write({
-        type: 'workflow-start',
-        message: `开始生成${params.stockName}的研究报告`,
-        display: {
-          kind: 'workflow',
-          status: 'start',
-          title: `${params.stockName} 投资研究报告生成`,
-          steps: [
-            '股票信息查询',
-            '财务数据分析',
-            '市场数据分析',
-            '行业对比分析',
-            '研报内容生成'
-          ]
-        },
-        step: 0,
-        percentage: 0
-      })
-
-      // 2. 查询股票基本信息
-      workflowStream.write({
-        type: 'workflow-progress',
-        message: `正在查询${params.stockName}的股票信息...`,
-        step: 1,
-        percentage: 20
-      })
-
-      // 3. 提取股票代码
-      const stockInfo = await extractStockCode(params.stockName)
-      if (!stockInfo) {
-        throw new Error(
-          `无法找到${params.stockName}的股票代码,请提供准确的股票名称`
-        )
-      }
-
-      // 4. 更新进度
-      workflowStream.write({
-        type: 'workflow-progress',
-        message: `已确认股票代码: ${stockInfo.stockCode}, 正在获取财务数据...`,
-        step: 2,
-        percentage: 50
-      })
-
-      // 5. 确定报告日期
-      const reportDate = params.reportDate || getDefaultReportDate()
-
-      // 6. 构建完整的研报参数
-      const reportParams = {
-        stockCode: stockInfo.stockCode,
-        reportDate: reportDate,
-        reportType: params.reportType,
-        // 添加额外的参数，包括研报搜索结果和当前用户模型
-        additionalInfo: reportSearchResults.results.slice(0, 3).map(r => ({
-          title: r.title,
-          content: r.content,
-          url: r.url
-        })),
-        currentModel: params.currentModel
-      }
-
-      console.log('执行研报生成工具,处理后参数:', reportParams)
-
-      // 7. 执行研报生成工作流
+      // 执行研报生成工作流
       const result = await executeResearchReportWorkflow(
-        reportParams,
+        {
+          stockCode:
+            (await extractStockCode(params.stockName))?.stockCode || '',
+          reportDate: params.reportDate || getDefaultReportDate(),
+          reportType: params.reportType,
+          additionalInfo: [
+            ...basicSearchResults.results,
+            ...reportSearchResults.results
+          ],
+          currentModel: params.currentModel
+        },
         workflowStream
       )
+
       console.log('研报生成完成，结果长度:', result.length)
-      return result
-    } catch (error) {
-      console.error('研报生成工具执行错误:', error)
-      workflowStream.write({
-        type: 'workflow-error',
-        error: `研报生成失败: ${(error as Error).message}`,
-        details: '在处理股票数据时遇到了问题',
-        suggestion: '请尝试使用完整的股票名称或股票代码'
+
+      // 格式化研报标题和内容
+      const reportTitle = `# ${params.stockName}研究报告`
+      const fullReport = `${reportTitle}\n\n${result}`
+
+      // 直接写入markdown内容消息
+      dataStream.writeMessageAnnotation({
+        type: 'display',
+        display: {
+          kind: 'text',
+          title: `${params.stockName}研究报告`,
+          content: fullReport
+        }
       })
-      throw error
+
+      // 使用研报结果类型写入消息
+      dataStream.writeMessageAnnotation({
+        type: 'research_report_result',
+        data: fullReport
+      })
+
+      // 返回结果，符合SearchResults格式
+      return {
+        images: [],
+        results: [
+          {
+            title: `${params.stockName}研究报告`,
+            url: '',
+            content: fullReport
+          },
+          ...allSearchResults
+        ],
+        query: `${params.stockName} 研究报告`
+      }
+    } catch (error) {
+      console.error('生成研报时发生错误:', error)
+      return {
+        images: [],
+        results: allSearchResults,
+        query: `${params.stockName} 研究报告`
+      }
     }
   } catch (error) {
-    console.error('研报生成工具执行错误:', error)
-    throw error
+    console.error('执行研报工具时发生错误:', error)
+    return {
+      images: [],
+      results: [],
+      query: `${params.stockName} 研究报告`
+    }
   }
 }
