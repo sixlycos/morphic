@@ -376,40 +376,18 @@ export async function executeResearchReportWorkflow(
       toolInvocations: [reportGenerationInvocation] // 添加toolInvocations数组
     })
 
+    // 添加一个固定的进度更新
+    dataStream.write({
+      type: 'workflow-progress',
+      message: '正在生成研报内容...',
+      step: 4,
+      percentage: 85,
+      toolInvocations: [] // 添加空的toolInvocations字段
+    })
+
     // 使用新的流式生成方法
     const reportResult = await streamingResearchReport(reportData, {
-      // 处理部分内容生成
-      onPartialContent: content => {
-        console.log(`研报内容更新，内容长度: ${content.length}`)
-
-        const partialContentInvocation = {
-          toolName: 'generateResearchReport',
-          toolCallId: reportGenerationToolCallId,
-          state: 'partial' as const,
-          contentLength: content.length
-        }
-
-        // 发送部分内容更新
-        dataStream.write({
-          type: 'reasoning',
-          message: `生成研报内容`,
-          data: {
-            content
-          },
-          toolInvocations: [partialContentInvocation] // 添加toolInvocations数组
-        })
-
-        // 更新进度
-        dataStream.write({
-          type: 'workflow-progress',
-          message: '正在生成研报内容...',
-          step: 4,
-          percentage: 85,
-          toolInvocations: [] // 添加空的toolInvocations字段
-        })
-      },
-
-      // 处理错误
+      // 只处理错误，不再使用部分内容回调
       onError: error => {
         console.error('研报生成出错:', error)
 
@@ -484,26 +462,21 @@ export async function executeResearchReportWorkflow(
       }
     }
 
-    // 使用text类型返回最终研报内容
-    dataStream.write({
-      type: 'text',
-      text: cleanReport,
-      toolInvocations: [finalReportInvocation] // 添加toolInvocations数组
-    })
-
-    // 添加完成消息，但不重复完整内容
+    // 直接在workflow-complete中发送研报内容，不再使用text类型消息
     dataStream.write({
       type: 'workflow-complete',
-      data: { completed: true, length: cleanReport.length },
+      data: {
+        completed: true,
+        length: cleanReport.length,
+        content: cleanReport // 在这里传递研报内容
+      },
       message: '研报生成完成，请查看详细内容',
       toolInvocations: [finalReportInvocation] // 添加toolInvocations数组
     })
 
-    // 添加明确的日志和完成标记
+    // 添加简洁日志和完成标记
     console.log('========== 研报工作流执行完成 ==========')
-    console.log('研报数据类型:', typeof reportResult.content)
     console.log('研报数据长度:', reportResult.content?.length || 0)
-    console.log('研报数据前200个字符:', reportResult.content?.substring(0, 200))
     console.log('===========================================')
 
     // 确保有有效数据但不再返回文本内容

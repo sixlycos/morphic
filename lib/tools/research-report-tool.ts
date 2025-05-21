@@ -225,17 +225,7 @@ export async function executeResearchReportTool(
       const reportTitle = `# ${params.stockName}研究报告`
       const fullReport = `${reportTitle}\n\n${result}`
 
-      // 直接写入markdown内容消息
-      dataStream.writeMessageAnnotation({
-        type: 'display',
-        display: {
-          kind: 'text',
-          title: `${params.stockName}研究报告`,
-          content: fullReport
-        }
-      })
-
-      // 使用研报结果类型写入消息
+      // 移除重复的display消息，只保留研报结果类型消息
       dataStream.writeMessageAnnotation({
         type: 'research_report_result',
         data: fullReport

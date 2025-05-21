@@ -180,20 +180,20 @@ export async function generateResearchReport(
       ]
     })
 
+    // 只记录生成状态，不打印内容
     console.log('AI生成研报成功:', {
       responseType: typeof reportResponse,
-      textType: typeof reportResponse.text,
-      textLength: reportResponse.text?.length || 0,
-      preview: reportResponse.text?.substring(0, 200) || '无内容'
+      textLength: reportResponse.text?.length || 0
     })
 
-    // 验证返回的内容是否有效
     if (!reportResponse.text || reportResponse.text.trim().length === 0) {
-      console.warn('警告：AI返回的研报内容为空，将使用模板方法')
-      return generateTemplateReport(data)
+      throw new Error('AI返回的研报内容为空')
     }
 
-    return reportResponse.text
+    const fullReport = reportResponse.text
+
+    // 直接返回结果，不再通过回调打印内容
+    return fullReport
   } catch (error) {
     console.error('AI生成研报失败:', error)
     // 如果AI生成失败,回退到模板方法
@@ -209,18 +209,6 @@ export async function streamingResearchReport(
     onError?: (error: Error) => void
   } = {}
 ) {
-  console.log('开始生成研报,数据概览:', {
-    公司名称: data.basicInfo.name,
-    行业: data.basicInfo.industry,
-    财务数据条目数: {
-      income: data.financialData.income.length,
-      balance: data.financialData.balance.length,
-      cashflow: data.financialData.cashflow.length,
-      indicators: data.financialData.indicators.length
-    },
-    市场数据条目数: data.marketData.length
-  })
-
   try {
     // 准备用于AI的输入数据
     const inputData = {
@@ -251,35 +239,11 @@ export async function streamingResearchReport(
     }
 
     // 选择模型ID
-    let modelId = data.currentModel
-
-    if (!modelId) {
-      try {
-        if (
-          typeof window !== 'undefined' &&
-          window.__NEXT_DATA__?.props?.pageProps?.model
-        ) {
-          modelId = window.__NEXT_DATA__.props.pageProps.model
-        } else if (typeof localStorage !== 'undefined') {
-          const storedModel = localStorage.getItem('selectedModel')
-          if (storedModel) {
-            modelId = JSON.parse(storedModel).id
-          }
-        }
-      } catch (e) {
-        console.log('获取用户模型失败，使用默认模型:', e)
-      }
-    }
-
-    if (!modelId) {
-      modelId = process.env.REPORT_MODEL || 'openai:gpt-4'
-    }
-
+    let modelId =
+      data.currentModel || process.env.REPORT_MODEL || 'openai:gpt-4'
     if (!modelId.includes(':')) {
       modelId = `openai:${modelId}`
     }
-
-    console.log('使用模型生成研报:', modelId)
 
     // 调用AI生成研报
     const reportResponse = await generateText({
@@ -303,13 +267,8 @@ export async function streamingResearchReport(
 
     const fullReport = reportResponse.text
 
-    // 可选地提供部分内容更新
-    if (callbacks.onPartialContent) {
-      callbacks.onPartialContent(fullReport)
-    }
-
+    // 直接返回结果，不再通过回调打印内容
     return {
-      text: fullReport,
       content: fullReport
     }
   } catch (error) {
@@ -320,7 +279,6 @@ export async function streamingResearchReport(
     const templateReport = generateTemplateReport(data)
 
     return {
-      text: templateReport,
       content: templateReport
     }
   }
