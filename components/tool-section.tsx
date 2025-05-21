@@ -2,6 +2,7 @@
 
 import { ToolInvocation } from 'ai'
 import { QuestionConfirmation } from './question-confirmation'
+import { ResearchReportSection } from './research-report-section'
 import RetrieveSection from './retrieve-section'
 import { SearchSection } from './search-section'
 import { VideoSearchSection } from './video-search-section'
@@ -19,6 +20,15 @@ export function ToolSection({
   onOpenChange,
   addToolResult
 }: ToolSectionProps) {
+  console.log('ToolSection render:', {
+    toolName: tool.toolName,
+    toolState: tool.state,
+    hasResult: tool.state === 'result',
+    resultType: tool.state === 'result' ? typeof (tool as any).result : 'undefined',
+    resultKeys: tool.state === 'result' ? Object.keys((tool as any).result || {}) : [],
+    isOpen
+  })
+
   // Special handling for ask_question tool
   if (tool.toolName === 'ask_question') {
     // When waiting for user input
@@ -32,10 +42,10 @@ export function ToolSection({
               result: approved
                 ? response
                 : {
-                    declined: true,
-                    skipped: response?.skipped,
-                    message: 'User declined this question'
-                  }
+                  declined: true,
+                  skipped: response?.skipped,
+                  message: 'User declined this question'
+                }
             })
           }}
         />
@@ -48,38 +58,37 @@ export function ToolSection({
         <QuestionConfirmation
           toolInvocation={tool}
           isCompleted={true}
-          onConfirm={() => {}} // Not used in result display mode
+          onConfirm={() => { }} // Not used in result display mode
         />
       )
     }
   }
 
-  switch (tool.toolName) {
-    case 'search':
-      return (
-        <SearchSection
-          tool={tool}
-          isOpen={isOpen}
-          onOpenChange={onOpenChange}
-        />
-      )
-    case 'videoSearch':
-      return (
-        <VideoSearchSection
-          tool={tool}
-          isOpen={isOpen}
-          onOpenChange={onOpenChange}
-        />
-      )
-    case 'retrieve':
-      return (
-        <RetrieveSection
-          tool={tool}
-          isOpen={isOpen}
-          onOpenChange={onOpenChange}
-        />
-      )
-    default:
-      return null
+  // 根据工具类型选择对应的组件
+  const Component = (() => {
+    switch (tool.toolName) {
+      case 'search':
+        return SearchSection
+      case 'videoSearch':
+        return VideoSearchSection
+      case 'retrieve':
+        return RetrieveSection
+      case 'research_report':
+        return ResearchReportSection
+      default:
+        return null
+    }
+  })()
+
+  if (!Component) {
+    return null
   }
+
+  return (
+    <Component
+      tool={tool}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+    />
+  )
 }

@@ -33,6 +33,21 @@ Citation Format:
 [number](url)
 `
 
+// 增加适用于搜索模式的系统提示
+const SEARCH_MODE_ADDITIONAL_PROMPT = `
+IMPORTANT INSTRUCTIONS FOR SEARCH MODE:
+
+1. You MUST ALWAYS use the search tool for ANY factual questions or requests for information.
+2. Your knowledge is limited and may be outdated. ALWAYS search for current, accurate information.
+3. For ANY question about current events, facts, data, or information, you MUST use the search tool FIRST.
+4. NEVER rely solely on your general knowledge for answering factual questions.
+5. After using search, ALWAYS cite your sources using the proper citation format.
+6. If the search results are not helpful, you should acknowledge this and suggest a different search query.
+7. ALWAYS prioritize search results over your built-in knowledge.
+
+This is a strict requirement - you MUST use the search tool for information-seeking questions.
+`
+
 type ResearcherReturn = Parameters<typeof streamText>[0]
 
 export function researcher({
@@ -52,9 +67,14 @@ export function researcher({
     const videoSearchTool = createVideoSearchTool(model)
     const askQuestionTool = createQuestionTool(model)
 
+    // 根据搜索模式决定使用哪个系统提示
+    const finalSystemPrompt = searchMode
+      ? `${SYSTEM_PROMPT}${SEARCH_MODE_ADDITIONAL_PROMPT}\nCurrent date and time: ${currentDate}`
+      : `${SYSTEM_PROMPT}\nCurrent date and time: ${currentDate}`
+
     return {
       model: getModel(model),
-      system: `${SYSTEM_PROMPT}\nCurrent date and time: ${currentDate}`,
+      system: finalSystemPrompt,
       messages,
       tools: {
         search: searchTool,
@@ -65,7 +85,7 @@ export function researcher({
       experimental_activeTools: searchMode
         ? ['search', 'retrieve', 'videoSearch', 'ask_question']
         : [],
-      maxSteps: searchMode ? 5 : 1,
+      maxSteps: searchMode ? 10 : 1,
       experimental_transform: smoothStream()
     }
   } catch (error) {

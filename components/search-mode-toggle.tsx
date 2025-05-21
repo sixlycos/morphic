@@ -14,6 +14,7 @@ export function SearchModeToggle() {
     if (savedMode !== null) {
       setIsSearchMode(savedMode === 'true')
     } else {
+      setIsSearchMode(true)
       setCookie('search-mode', 'true')
     }
   }, [])
@@ -21,6 +22,13 @@ export function SearchModeToggle() {
   const handleSearchModeChange = (pressed: boolean) => {
     setIsSearchMode(pressed)
     setCookie('search-mode', pressed.toString())
+
+    console.log('搜索模式已切换:', pressed)
+
+    setTimeout(() => {
+      const savedMode = getCookie('search-mode')
+      console.log('存储的搜索模式:', savedMode)
+    }, 100)
   }
 
   return (

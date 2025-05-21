@@ -90,15 +90,28 @@ export function ToolsSelector({ tools = defaultTools }: ToolsSelectorProps) {
                 )
 
                 setSelectedTools(validTools)
+
+                // 如果没有工具被选中，默认选择研报工具
+                if (validTools.length === 0) {
+                    const defaultSelected = ['research_report']
+                    setSelectedTools(defaultSelected)
+                    setCookie('selectedTools', JSON.stringify(defaultSelected))
+                    console.log('默认选择工具:', defaultSelected)
+                }
             } catch (e) {
                 console.error('Failed to parse saved tools:', e)
-                setSelectedTools([])
-                setCookie('selectedTools', JSON.stringify([]))
+                // 默认选择研报工具
+                const defaultSelected = ['research_report']
+                setSelectedTools(defaultSelected)
+                setCookie('selectedTools', JSON.stringify(defaultSelected))
+                console.log('解析失败，默认选择工具:', defaultSelected)
             }
         } else {
-            // 默认不选择任何工具
-            setSelectedTools([])
-            setCookie('selectedTools', JSON.stringify([]))
+            // 默认选择研报工具
+            const defaultSelected = ['research_report']
+            setSelectedTools(defaultSelected)
+            setCookie('selectedTools', JSON.stringify(defaultSelected))
+            console.log('无保存工具，默认选择:', defaultSelected)
         }
     }, [])
 
@@ -108,11 +121,13 @@ export function ToolsSelector({ tools = defaultTools }: ToolsSelectorProps) {
             if (prev.includes(id)) {
                 const newSelection = prev.filter(toolId => toolId !== id)
                 setCookie('selectedTools', JSON.stringify(newSelection))
+                console.log('工具已移除:', id, '当前工具:', newSelection)
                 return newSelection
             }
             // 添加新工具到选择
             const newSelection = [...prev, id]
             setCookie('selectedTools', JSON.stringify(newSelection))
+            console.log('工具已添加:', id, '当前工具:', newSelection)
             return newSelection
         })
     }

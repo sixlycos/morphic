@@ -32,6 +32,15 @@ export function RenderMessage({
   onUpdateMessage,
   reload
 }: RenderMessageProps) {
+  console.log('RenderMessage:', {
+    messageId,
+    messageRole: message.role,
+    hasAnnotations: !!message.annotations,
+    annotationsCount: message.annotations?.length,
+    hasParts: !!message.parts,
+    partsCount: message.parts?.length
+  })
+
   const relatedQuestions = useMemo(
     () =>
       message.annotations?.filter(

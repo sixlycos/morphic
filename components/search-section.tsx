@@ -36,6 +36,15 @@ export function SearchSection({
     ? ` [${includeDomains.join(', ')}]`
     : ''
 
+  console.log('SearchSection render:', {
+    toolState: tool.state,
+    hasResults: !!searchResults,
+    resultsLength: searchResults?.results?.length,
+    query,
+    isLoading,
+    isToolLoading
+  })
+
   const { open } = useArtifact()
   const header = (
     <button
