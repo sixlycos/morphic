@@ -378,110 +378,34 @@ export async function executeResearchReportWorkflow(
 
     // 使用新的流式生成方法
     const reportResult = await streamingResearchReport(reportData, {
-      // 处理步骤开始
-      onStepStart: (step, details) => {
-        console.log(`研报生成步骤开始: ${step}`, details)
-
-        let message = '正在生成研报...'
-        let percentage = 75
-
-        if (step === 'data_preparation') {
-          message = '正在准备研报数据...'
-          percentage = 72
-        } else if (step === 'model_selection') {
-          message = '正在选择研报生成模型...'
-          percentage = 75
-        } else if (step === 'report_generation') {
-          message = '开始生成研报内容...'
-          percentage = 78
-        } else if (step === 'section_generation') {
-          message = `正在生成"${details?.section || '研报部分'}"...`
-          percentage = 80
-        }
-
-        dataStream.write({
-          type: 'workflow-progress',
-          message,
-          step: 4,
-          percentage,
-          toolInvocations: [] // 添加空的toolInvocations字段
-        })
-
-        // 发送步骤开始的part消息
-        dataStream.write({
-          type: 'step-start',
-          message: `${message}`,
-          data: details,
-          toolInvocations: [] // 添加空的toolInvocations字段
-        })
-      },
-
       // 处理部分内容生成
-      onPartialContent: (content, section) => {
-        console.log(`研报部分内容更新: ${section}`, content.length)
+      onPartialContent: content => {
+        console.log(`研报内容更新，内容长度: ${content.length}`)
 
         const partialContentInvocation = {
-          toolName: 'generateResearchReportSection',
-          toolCallId: `${reportGenerationToolCallId}_${section}`,
+          toolName: 'generateResearchReport',
+          toolCallId: reportGenerationToolCallId,
           state: 'partial' as const,
-          section,
           contentLength: content.length
         }
 
         // 发送部分内容更新
         dataStream.write({
           type: 'reasoning',
-          message: `生成研报内容: ${section}`,
+          message: `生成研报内容`,
           data: {
-            section,
             content
           },
           toolInvocations: [partialContentInvocation] // 添加toolInvocations数组
         })
-      },
 
-      // 处理步骤完成
-      onStepComplete: (step, result) => {
-        console.log(`研报生成步骤完成: ${step}`, result)
-
-        let message = '研报部分生成完成'
-        let percentage = 85
-
-        if (step === 'data_preparation') {
-          message = '研报数据准备完成'
-          percentage = 75
-        } else if (step === 'model_selection') {
-          message = '模型选择完成'
-          percentage = 78
-        } else if (step === 'report_generation') {
-          message = '研报内容生成完成'
-          percentage = 95
-        } else if (step === 'section_generation') {
-          message = `"${result?.section || '研报部分'}"生成完成`
-          percentage = 90
-        }
-
-        const stepCompleteInvocation = {
-          toolName: `complete${step.charAt(0).toUpperCase() + step.slice(1)}`,
-          toolCallId: `${reportGenerationToolCallId}_${step}_complete`,
-          state: 'complete' as const,
-          result
-        }
-
+        // 更新进度
         dataStream.write({
           type: 'workflow-progress',
-          message,
+          message: '正在生成研报内容...',
           step: 4,
-          percentage,
-          toolInvocations: [stepCompleteInvocation] // 添加toolInvocations数组
-        })
-
-        // 发送步骤完成的part消息
-        dataStream.write({
-          type: 'step-complete',
-          message: `${message}`,
-          data: result,
-          toolInvocations: [stepCompleteInvocation] // 添加toolInvocations数组
+          percentage: 85,
+          toolInvocations: [] // 添加空的toolInvocations字段
         })
       },
 
@@ -519,8 +443,7 @@ export async function executeResearchReportWorkflow(
       toolCallId: reportGenerationToolCallId,
       state: 'result' as const,
       result: {
-        reportLength: reportResult.text?.length || 0,
-        sectionsCount: reportResult.parts?.length || 0
+        reportLength: reportResult.content?.length || 0
       }
     }
 
@@ -546,35 +469,9 @@ export async function executeResearchReportWorkflow(
       toolInvocations: [] // 添加空的toolInvocations字段
     })
 
-    // 输出研报各部分为独立的part
-    if (reportResult?.parts && reportResult.parts.length > 0) {
-      // 每个部分单独发送
-      for (const part of reportResult.parts) {
-        if (part.type === 'section' && part.title && part.content) {
-          const partInvocation = {
-            toolName: 'displayReportSection',
-            toolCallId: generateToolCallId(),
-            state: 'result' as const,
-            section: part.title,
-            contentLength: part.content.length
-          }
-
-          dataStream.write({
-            type: 'part',
-            display: {
-              kind: 'section',
-              title: part.title,
-              content: part.content
-            },
-            toolInvocations: [partInvocation] // 添加toolInvocations数组
-          })
-        }
-      }
-    }
-
     // 清理研报内容，去除Markdown标记
-    const cleanReport = reportResult.text
-      ? reportResult.text.replace(/```markdown\n|\n```/g, '')
+    const cleanReport = reportResult.content
+      ? reportResult.content.replace(/```markdown\n|\n```/g, '')
       : ''
 
     // 最终结果工具调用
@@ -583,12 +480,11 @@ export async function executeResearchReportWorkflow(
       toolCallId: generateToolCallId(),
       state: 'result' as const,
       result: {
-        reportLength: cleanReport.length,
-        partsCount: reportResult.parts?.length || 0
+        reportLength: cleanReport.length
       }
     }
 
-    // 只使用一种方式返回最终研报内容，避免重复
+    // 使用text类型返回最终研报内容
     dataStream.write({
       type: 'text',
       text: cleanReport,
@@ -605,24 +501,23 @@ export async function executeResearchReportWorkflow(
 
     // 添加明确的日志和完成标记
     console.log('========== 研报工作流执行完成 ==========')
-    console.log('研报数据类型:', typeof reportResult.text)
-    console.log('研报数据长度:', reportResult.text?.length || 0)
-    console.log('研报各部分数量:', reportResult.parts?.length || 0)
-    console.log('研报数据前200个字符:', reportResult.text?.substring(0, 200))
+    console.log('研报数据类型:', typeof reportResult.content)
+    console.log('研报数据长度:', reportResult.content?.length || 0)
+    console.log('研报数据前200个字符:', reportResult.content?.substring(0, 200))
     console.log('===========================================')
 
     // 确保有有效数据但不再返回文本内容
     if (
-      !reportResult.text ||
-      typeof reportResult.text !== 'string' ||
-      reportResult.text.trim().length === 0
+      !reportResult.content ||
+      typeof reportResult.content !== 'string' ||
+      reportResult.content.trim().length === 0
     ) {
       console.error('警告：研报内容为空或无效！')
       throw new Error('研报生成失败：内容为空或无效')
     }
 
-    // 不再返回报告内容
-    return ''
+    // 返回完整的研报内容
+    return cleanReport
   } catch (error) {
     console.error('研报工作流执行失败:', error)
 

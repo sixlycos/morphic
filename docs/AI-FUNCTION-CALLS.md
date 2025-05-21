@@ -190,6 +190,277 @@ const handleToolCall = async () => {
    - 数据加密
    - 安全传输
 
+## 多工具工作流升级方案
+
+本章节介绍如何扩展现有的单工具调用架构，支持多工具顺序执行的工作流。
+
+### 1. 工具注册与管理升级
+
+为支持多工具调用，需要创建统一的工具注册中心：
+
+```typescript
+// lib/tools/registry.ts
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  schema: z.ZodType<any>;
+  execute: (params: any) => Promise<any>;
+}
+
+// 工具注册表
+const toolRegistry: Record<string, ToolDefinition> = {};
+
+// 注册工具
+export function registerTool(toolId: string, toolDef: ToolDefinition) {
+  toolRegistry[toolId] = toolDef;
+}
+
+// 获取工具
+export function getTool(toolId: string): ToolDefinition | undefined {
+  return toolRegistry[toolId];
+}
+
+// 获取所有工具
+export function getAllTools(): Record<string, ToolDefinition> {
+  return { ...toolRegistry };
+}
+```
+
+### 2. 工作流定义和执行
+
+工作流由多个工具调用步骤组成，支持参数传递：
+
+```typescript
+// lib/workflow/index.ts
+export interface WorkflowStep {
+  toolId: string;
+  params: Record<string, any> | ((prevResults: any[]) => Record<string, any>);
+}
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string;
+  steps: WorkflowStep[];
+}
+
+// 预定义工作流示例
+export const predefinedWorkflows: Record<string, Workflow> = {
+  'financial_alert': {
+    id: 'financial_alert',
+    name: '财务异常预警器',
+    description: '监控关键指标异动',
+    steps: [
+      { 
+        toolId: 'search', 
+        params: { 
+          query: '财务异常指标识别方法',
+          search_depth: 'advanced'
+        } 
+      },
+      { 
+        toolId: 'retrieve', 
+        params: (prevResults) => {
+          // 使用前一步骤的结果动态生成参数
+          const searchResults = prevResults[0];
+          return { 
+            id: searchResults[0]?.id,
+            type: 'article'
+          };
+        } 
+      }
+    ]
+  }
+};
+```
+
+### 3. 工作流执行引擎
+
+新增工作流执行引擎，支持多步骤执行和结果传递：
+
+```typescript
+// lib/workflow/execute-workflow.ts
+export async function executeWorkflow(
+  workflowId: string,
+  dataStream: DataStreamWriter,
+  coreMessages: CoreMessage[],
+  model: string
+): Promise<any[]> {
+  const workflow = predefinedWorkflows[workflowId];
+  if (!workflow) {
+    throw new Error(`未找到工作流: ${workflowId}`);
+  }
+  
+  // 执行工作流步骤
+  const results = [];
+  for (let i = 0; i < workflow.steps.length; i++) {
+    const step = workflow.steps[i];
+    
+    // 更新UI进度
+    dataStream.writeData({
+      type: 'workflow_progress',
+      data: {
+        currentStep: i,
+        totalSteps: workflow.steps.length,
+        stepName: `执行${step.toolId}工具`
+      }
+    });
+    
+    // 解析参数 - 静态或动态
+    const params = typeof step.params === 'function' 
+      ? step.params(results) 
+      : step.params;
+    
+    // 执行工具调用
+    const result = await executeTool(step.toolId, params, dataStream, coreMessages, model);
+    results.push(result);
+    
+    // 添加结果到消息历史
+    coreMessages.push({
+      role: 'assistant',
+      content: `Tool ${step.toolId} result: ${JSON.stringify(result)}`
+    });
+  }
+  
+  return results;
+}
+```
+
+### 4. 扩展工具执行器
+
+修改工具执行逻辑，支持动态工具选择：
+
+```typescript
+// lib/streaming/execute-tool.ts
+export async function executeTool(
+  toolId: string,
+  params: Record<string, any>,
+  dataStream: DataStreamWriter,
+  coreMessages: CoreMessage[],
+  model: string
+): Promise<any> {
+  const tool = getTool(toolId);
+  if (!tool) {
+    throw new Error(`未找到工具: ${toolId}`);
+  }
+  
+  // 验证参数
+  const validatedParams = tool.schema.parse(params);
+  
+  // 执行工具调用
+  return await tool.execute(validatedParams);
+}
+```
+
+### 5. 改进系统提示
+
+优化AI对工具选择的能力，使用更清晰的指令：
+
+```typescript
+const systemPrompt = `You are an intelligent assistant analyzing this conversation to determine the most appropriate tool to use.
+
+You excel at understanding complex requests and selecting the appropriate tool.
+Current date: ${new Date().toISOString().split('T')[0]}
+
+Available tools:
+${Object.entries(getAllTools()).map(([id, tool]) => 
+  `- ${id}: ${tool.description}`
+).join('\n')}
+
+For each tool, provide parameters in this format:
+${Object.entries(getAllTools()).map(([id, tool]) => {
+  const schemaString = Object.entries(tool.schema.shape)
+    .map(([key, value]) => {
+      const description = value.description;
+      const isOptional = value instanceof z.ZodOptional;
+      return `  - ${key}${isOptional ? ' (optional)' : ''}: ${description}`;
+    })
+    .join('\n');
+  return `Tool: ${id}\n${schemaString}`;
+}).join('\n\n')}
+
+Respond in XML format with your selected tool and parameters.`;
+```
+
+### 6. 用户体验增强
+
+扩展工作流UI组件，显示多步骤执行状态：
+
+```typescript
+const WorkflowProgressDisplay = ({ 
+  currentStep, 
+  totalSteps, 
+  stepInfo,
+  results 
+}) => {
+  return (
+    <div className="workflow-progress">
+      <h3>工作流执行进度: {currentStep}/{totalSteps}</h3>
+      <div className="steps-container">
+        {[...Array(totalSteps)].map((_, index) => (
+          <div 
+            key={index} 
+            className={`step ${
+              index < currentStep ? 'completed' : 
+              index === currentStep ? 'active' : 'pending'
+            }`}
+          >
+            <div className="step-number">{index + 1}</div>
+            <div className="step-info">
+              {index < currentStep && results[index] && (
+                <div className="step-result">
+                  {/* 显示结果摘要 */}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+```
+
+### 7. 实现计划
+
+工作流系统实现分为四个阶段：
+
+1. **阶段一：基础设施**
+   - 实现工具注册表 (`lib/tools/registry.ts`)
+   - 标准化工具接口定义
+   - 转换现有工具到新接口
+
+2. **阶段二：工作流结构**
+   - 实现工作流定义 (`lib/workflow/index.ts`)
+   - 开发工作流执行引擎 (`lib/workflow/execute-workflow.ts`)
+   - 支持步骤间结果传递
+
+3. **阶段三：UI组件**
+   - 实现工作流进度组件
+   - 开发工作流选择器
+   - 集成到现有对话界面
+
+4. **阶段四：完善和优化**
+   - 增强错误处理
+   - 改进系统提示
+   - 添加更多预定义工作流
+
+### 8. 注意事项与最佳实践
+
+1. **兼容性考虑**
+   - 保持向后兼容，现有功能不受影响
+   - 渐进式启用新功能，避免破坏性变更
+
+2. **错误处理增强**
+   - 工作流级别的错误恢复
+   - 步骤失败后的回退策略
+   - 清晰的错误提示与建议
+
+3. **性能优化**
+   - 缓存频繁使用的工具结果
+   - 优化消息历史大小，避免上下文爆炸
+   - 支持长时间运行的工作流暂停和恢复
+
 ## 扩展开发
 
 要添加新的工具类型，需要：

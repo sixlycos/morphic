@@ -65,7 +65,6 @@ const RESEARCH_REPORT_SYSTEM_PROMPT = `
 - 深入分析数据背后的业务含义
 - 揭示非直观的关联与趋势
 - 提供独到的行业见解
-- 适当使用专业图表和可视化描述
 - 以客观数据支持主观判断
 - 关注异常数据及其可能含义
 - 提出具有前瞻性的观点
@@ -206,13 +205,11 @@ export async function generateResearchReport(
 export async function streamingResearchReport(
   data: ResearchReportData,
   callbacks: {
-    onStepStart?: (step: string, details?: any) => void
-    onStepComplete?: (step: string, result?: any) => void
-    onPartialContent?: (content: string, section: string) => void
+    onPartialContent?: (content: string) => void
     onError?: (error: Error) => void
   } = {}
 ) {
-  console.log('开始流式生成研报,数据概览:', {
+  console.log('开始生成研报,数据概览:', {
     公司名称: data.basicInfo.name,
     行业: data.basicInfo.industry,
     财务数据条目数: {
@@ -225,11 +222,6 @@ export async function streamingResearchReport(
   })
 
   try {
-    // 通知开始数据准备阶段
-    callbacks.onStepStart?.('data_preparation', {
-      company: data.basicInfo.name
-    })
-
     // 准备用于AI的输入数据
     const inputData = {
       basicInfo: data.basicInfo,
@@ -257,13 +249,6 @@ export async function streamingResearchReport(
       },
       additionalInfo: data.additionalInfo || []
     }
-
-    callbacks.onStepComplete?.('data_preparation', {
-      dataPointsCount: Object.keys(inputData).length
-    })
-
-    // 通知开始模型选择阶段
-    callbacks.onStepStart?.('model_selection')
 
     // 选择模型ID
     let modelId = data.currentModel
@@ -294,24 +279,7 @@ export async function streamingResearchReport(
       modelId = `openai:${modelId}`
     }
 
-    callbacks.onStepComplete?.('model_selection', { selectedModel: modelId })
-
-    // 通知开始生成研报阶段
-    callbacks.onStepStart?.('report_generation', { model: modelId })
-
     console.log('使用模型生成研报:', modelId)
-
-    // 研报各部分
-    const reportSections = [
-      '公司概况',
-      '财务分析',
-      '市场表现',
-      '风险分析',
-      '投资建议'
-    ]
-
-    // 模拟各部分生成完成的通知
-    // 在实际实现中，可以使用支持流式输出的API或解析模型输出来实现这个功能
 
     // 调用AI生成研报
     const reportResponse = await generateText({
@@ -333,89 +301,27 @@ export async function streamingResearchReport(
       throw new Error('AI返回的研报内容为空')
     }
 
-    // 模拟将完整研报拆分成各部分
     const fullReport = reportResponse.text
 
-    // 拆分研报内容为各部分并触发回调
-    let currentSection = '标题'
-    const lines = fullReport.split('\n')
-    let sectionContent = ''
-
-    for (const line of lines) {
-      // 检测新部分的开始（通常是二级标题）
-      if (line.startsWith('## ')) {
-        // 发送上一部分内容
-        if (sectionContent.trim()) {
-          callbacks.onPartialContent?.(sectionContent, currentSection)
-        }
-
-        // 更新当前部分
-        currentSection = line.replace('## ', '').trim()
-        sectionContent = line + '\n'
-
-        // 通知新部分开始
-        callbacks.onStepStart?.('section_generation', {
-          section: currentSection
-        })
-      } else {
-        sectionContent += line + '\n'
-
-        // 定期发送部分内容更新
-        if (sectionContent.length > 100 && Math.random() > 0.7) {
-          callbacks.onPartialContent?.(sectionContent, currentSection)
-        }
-      }
+    // 可选地提供部分内容更新
+    if (callbacks.onPartialContent) {
+      callbacks.onPartialContent(fullReport)
     }
-
-    // 发送最后一部分
-    if (sectionContent.trim()) {
-      callbacks.onPartialContent?.(sectionContent, currentSection)
-      callbacks.onStepComplete?.('section_generation', {
-        section: currentSection
-      })
-    }
-
-    callbacks.onStepComplete?.('report_generation', {
-      reportLength: fullReport.length
-    })
 
     return {
       text: fullReport,
-      parts: reportSections.map(section => {
-        // 提取每个部分内容的逻辑（简化版）
-        const sectionStartMarker = `## ${section}`
-        const sectionStart = fullReport.indexOf(sectionStartMarker)
-        if (sectionStart === -1)
-          return { type: 'section' as const, title: section, content: '' }
-
-        const nextSectionIndex = reportSections.indexOf(section) + 1
-        const nextSection =
-          nextSectionIndex < reportSections.length
-            ? `## ${reportSections[nextSectionIndex]}`
-            : null
-        const sectionEnd = nextSection
-          ? fullReport.indexOf(nextSection, sectionStart)
-          : fullReport.length
-
-        const content = fullReport.substring(sectionStart, sectionEnd).trim()
-
-        return {
-          type: 'section' as const,
-          title: section,
-          content
-        }
-      })
+      content: fullReport
     }
   } catch (error) {
-    console.error('流式生成研报失败:', error)
+    console.error('生成研报失败:', error)
     callbacks.onError?.(error as Error)
 
-    // 如果AI生成失败，使用模板方法并将其包装为流式输出格式
+    // 如果AI生成失败，使用模板方法
     const templateReport = generateTemplateReport(data)
 
     return {
       text: templateReport,
-      parts: [{ type: 'text' as const, content: templateReport }]
+      content: templateReport
     }
   }
 }
